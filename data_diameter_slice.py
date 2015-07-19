@@ -2,12 +2,7 @@ import numpy
 import pandas
 from scipy.interpolate import interp1d
 
-from foldkin.coop.coop_model import CoopModelFactory
-from foldkin.coop.coop_model_parameter_set import CoopModelParameterSet
-from foldkin.util import convert_T_to_beta
 
-
-# X_SCALE_FACTOR = 2.0 # N = 8
 X_SCALE_FACTOR = 2.5 # N = 4
 BASIN_START = 0.0
 BASIN_END = 0.2 * X_SCALE_FACTOR
@@ -20,28 +15,6 @@ DOWN_SLOPE_END = 0.98 * X_SCALE_FACTOR
 CRATER_START = DOWN_SLOPE_END
 CRATER_END = 1.0 * X_SCALE_FACTOR
 
-
-def load_Kf_file():
-    df = pandas.read_csv('./logKf_vs_N.csv', header=0, index_col=0)
-    return df
-
-def compute_free_energy(N, log_Kf):
-    parameters = CoopModelParameterSet()
-    parameters.set_parameter('N', N)
-    parameters.set_parameter('log_K_ss', -1.4318)
-    parameters.set_parameter('log_K_ter', 0.2922)
-    parameters.set_parameter('log_K_f', log_Kf)
-    parameters.set_parameter('log_k0', 5.6)
-    model_factory = CoopModelFactory()
-    model = model_factory.create_model(parameters)
-    boltzmann_factor_array = model.compute_boltzmann_factors()
-    Q = boltzmann_factor_array.sum()
-    T = 300.
-    beta = convert_T_to_beta(T)
-    G = -(1./beta) * numpy.log(boltzmann_factor_array / Q)
-    G -= G[0]
-    c = model.get_C_array() * 2.
-    return c, G
 
 def rescale_x_values(c):
     c_ramp_only = c[:-1]
@@ -61,8 +34,7 @@ def rescale_y_values(G):
 
 def make_fit_fcn(ramp, G):
     crater_bottom = G[-1]
-    # crater_bottom -= 1.0 # exaggerated crater, N = 8
-    # crater_bottom -= 1.5 # exaggerated crater, N = 4
+    # crater_bottom -= 1.5 # exaggerated crater
     G_ramp_only = G[:-1]
     ramp_interpolate = interp1d(ramp, G_ramp_only, kind='cubic', bounds_error=False,
                            fill_value=numpy.nan)
@@ -74,10 +46,8 @@ def make_fit_fcn(ramp, G):
         y = a - b * (x - DOWN_SLOPE_START)**2
         return y
 
-    # b2 = b * 0.98 # N = 8
     b2 = b * 1.02 # N = 4
-    # b2 = b * 0.50 # exaggerated crater, N = 8
-    # b2 = b * 0.42 # exaggerated crater, N = 4
+    # b2 = b * 0.42 # exaggerated crater
     def rim_fcn(x):
         # y = numpy.ones_like(x) * G_ramp_only[-1]
         y = a - b2 * (x - DOWN_SLOPE_START)**2
@@ -106,27 +76,19 @@ def get_xyz_coords(fit_fcn, n_radii, n_angles, angle_range):
     Z = fit_fcn(interpolated_c_values)
     return X, Y, Z
 
-def compute_funnel_coordinates(N, n_radii, n_angles,
+def compute_funnel_coordinates(n_radii, n_angles,
                                angle_range=(-numpy.pi*3/4., numpy.pi)):
-    Kf_df = load_Kf_file()
-    log_Kf = Kf_df.get_value(N, 'log_Kf')
-    print N, log_Kf
-    c, G = compute_free_energy(N, log_Kf)
-    # print c
-    # print G
+    c = numpy.array([0., 2., 4., 6., 8.])
+    G = numpy.array([0., 1.146, 2.477, 3.891, -1.735])
     rescaled_c = rescale_x_values(c)
     rescaled_G = rescale_y_values(G)
     fit_fcn = make_fit_fcn(rescaled_c, rescaled_G)
     X, Y, Z = get_xyz_coords(fit_fcn, n_radii, n_angles, angle_range)
     return X, Y, Z
 
-def compute_outline_coordinates(N, n_radii, angle_range):
-    Kf_df = load_Kf_file()
-    log_Kf = Kf_df.get_value(N, 'log_Kf')
-    print N, log_Kf
-    c, G = compute_free_energy(N, log_Kf)
-    print c
-    print G
+def compute_outline_coordinates(n_radii, angle_range):
+    c = numpy.array([0., 2., 4., 6., 8.])
+    G = numpy.array([0., 1.146, 2.477, 3.891, -1.735])
     rescaled_c = rescale_x_values(c)
     rescaled_G = rescale_y_values(G)
     fit_fcn = make_fit_fcn(rescaled_c, rescaled_G)
